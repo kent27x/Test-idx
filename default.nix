@@ -20,9 +20,8 @@
       RAW_DISK="$VM_DIR/windows.qcow2"
       WIN_ISO="$VM_DIR/windows11.iso"
       VIRTIO_ISO="$VM_DIR/virtio-win.iso"
-      NOVNC_DIR="$HOME/noVNC"
 
-      mkdir -p "$VM_DIR" "$NOVNC_DIR"
+      mkdir -p "$VM_DIR"
 
       # Download Windows ISO
       if [ ! -f "$WIN_ISO" ]; then
@@ -39,7 +38,7 @@
         qemu-img create -f qcow2 "$RAW_DISK" 11G
       fi
 
-      # Start QEMU with RealVNC
+      # Start QEMU with RDP port forwarding
       nohup qemu-system-x86_64 \
         -enable-kvm \
         -cpu host \
@@ -48,13 +47,12 @@
         -drive file="$RAW_DISK",format=qcow2,if=virtio \
         -cdrom "$WIN_ISO" \
         -drive file="$VIRTIO_ISO",media=cdrom,if=ide \
-        -vnc :0,password \
         -vga virtio \
         -device virtio-balloon-pci \
         -net nic -net user,hostfwd=tcp::3389-:3389 \
         > /tmp/qemu.log 2>&1 &
 
-      echo "QEMU started. Connect via RealVNC on port 5900."
+      echo "QEMU started. Connect via RDP on port 3389."
     '';
   };
 }
