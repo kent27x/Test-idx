@@ -1,61 +1,60 @@
-{ pkgs, ... }: {
+{ pkgs, ... }:
 
+{
   channel = "stable-24.11";
 
   packages = [
     pkgs.qemu
+    pkgs.cloudflared
+    pkgs.git
     pkgs.wget
+    pkgs.python3
     pkgs.htop
   ];
 
   idx.workspace.onStart = {
-    startvm = ''
+    qemu = ''
       set -e
 
       VM_DIR="$HOME/qemu"
-      DISK="$VM_DIR/windows.qcow2"
-      mkdir -p "$VM_DIR"
+      RAW_DISK="$VM_DIR/windows.qcow2"
+      WIN_ISO="$VM_DIR/windows11.iso"
+      VIRTIO_ISO="$VM_DIR/virtio-win.iso"
+      NOVNC_DIR="$HOME/noVNC"
 
-      # Create 11GB disk if missing
-      if [ ! -f "$DISK" ]; then
-        qemu-img create -f qcow2 "$DISK" 11G
+      mkdir -p "$VM_DIR" "$NOVNC_DIR"
+
+      # Download Windows ISO
+      if [ ! -f "$WIN_ISO" ]; then
+        wget -O "$WIN_ISO" https://github.com/kmille36/idx-windows-gui/releases/download/1.0/automic11.iso
       fi
 
-      echo "Starting Windows VM..."
+      # Download VirtIO drivers
+      if [ ! -f "$VIRTIO_ISO" ]; then
+        wget -O "$VIRTIO_ISO" https://github.com/kmille36/idx-windows-gui/releases/download/1.0/virtio-win-0.1.271.iso
+      fi
 
-      # Start QEMU with VNC, log VNC info to file for RealVNC
+      # Create QCOW2 disk if missing
+      if [ ! -f "$RAW_DISK" ]; then
+        qemu-img create -f qcow2 "$RAW_DISK" 11G
+      fi
+
+      # Start QEMU with RealVNC
       nohup qemu-system-x86_64 \
         -enable-kvm \
+        -cpu host \
+        -smp 4,sockets=1,cores=4,threads=1 \
         -m 11264 \
-        -smp 4 \
-        -drive file="$DISK",format=qcow2 \
+        -drive file="$RAW_DISK",format=qcow2,if=virtio \
+        -cdrom "$WIN_ISO" \
+        -drive file="$VIRTIO_ISO",media=cdrom,if=ide \
         -vnc :0,password \
-        > /home/user/vnc-info.txt 2>&1 &
+        -vga virtio \
+        -device virtio-balloon-pci \
+        -net nic -net user,hostfwd=tcp::3389-:3389 \
+        > /tmp/qemu.log 2>&1 &
 
-      echo "VNC info saved to /home/user/vnc-info.txt"
-
-      # Keep workspace alive 12 hours
-      for i in {1..720}; do
-        echo "Running minute $i"
-        sleep 60
-      done
+      echo "QEMU started. Connect via RealVNC on port 5900."
     '';
-  };
-
-  idx.previews = {
-    enable = true;
-    previews = {
-      qemu = {
-        manager = "web";
-        command = [
-          "bash" "-lc"
-          "echo 'noVNC running on port 8888'"
-        ];
-      };
-      terminal = {
-        manager = "web";
-        command = [ "bash" ];
-      };
-    };
   };
 }
